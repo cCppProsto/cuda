@@ -8,13 +8,13 @@
  ============================================================================
  */
 
-#include "../../../../common/book.h"
 #include <cuda_runtime.h>
+#include <sys/time.h>
+#include <unistd.h>
+
+#include "../../../../common/book.h"
 #include "../../../../common/helper_cuda.h"
 #include "../../../../common/helper_string.h"
-
-#include <sys/time.h>
-#include<unistd.h>
 
 #define N   60000
 
@@ -69,13 +69,11 @@ void print_device_info()
     printf("%s", msg);
 
     printf("  (%2d) Multiprocessors, (%3d) CUDA Cores/MP:     %d CUDA Cores\n",
-    deviceProp.multiProcessorCount,
-    _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor),
-    _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor) *
-    deviceProp.multiProcessorCount);
-    printf(
-    "  GPU Max Clock rate:                            %.0f MHz (%0.2f "
-    "GHz)\n",
+           deviceProp.multiProcessorCount,
+           _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor),
+           _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor) * deviceProp.multiProcessorCount);
+
+    printf("  GPU Max Clock rate:                            %.0f MHz (%0.2f GHz)\n",
     deviceProp.clockRate * 1e-3f, deviceProp.clockRate * 1e-6f);
 
     #if CUDART_VERSION >= 5000
@@ -146,6 +144,7 @@ namespace gpu_add
     int a[N], b[N], c[N];
     int *dev_a, *dev_b, *dev_c;
 
+
     // allocate the memory on the GPU
     HANDLE_ERROR( cudaMalloc( (void**)&dev_a, N * sizeof(int) ) );
     HANDLE_ERROR( cudaMalloc( (void**)&dev_b, N * sizeof(int) ) );
@@ -154,40 +153,33 @@ namespace gpu_add
     // fill the arrays 'a' and 'b' on the CPU
     for (int i=0; i<N; i++)
     {
-      a[i] = -i;
-      b[i] = i * i;
+      a[i] = i;
+      b[i] = i;
     }
 
     // copy the arrays 'a' and 'b' to the GPU
-    HANDLE_ERROR( cudaMemcpy( dev_a, a, N * sizeof(int),
-                              cudaMemcpyHostToDevice ) );
-    HANDLE_ERROR( cudaMemcpy( dev_b, b, N * sizeof(int),
-                              cudaMemcpyHostToDevice ) );
+    HANDLE_ERROR( cudaMemcpy( dev_a, a, N * sizeof(int), cudaMemcpyHostToDevice ) );
+    HANDLE_ERROR( cudaMemcpy( dev_b, b, N * sizeof(int), cudaMemcpyHostToDevice ) );
 
     cudaEvent_t start, stop;
     float gpuTime = 0.0;
 
     cudaEventCreate( &start );
     cudaEventCreate( &stop );
-
     cudaEventRecord( start, 0 );
 
-    add<<<N,1>>>( dev_a, dev_b, dev_c );
+    add<<<N, 1>>>( dev_a, dev_b, dev_c );
 
     cudaEventRecord( stop, 0 );
-
     cudaEventSynchronize( stop );
-
     cudaEventElapsedTime( &gpuTime, start, stop );
-    printf("time on GPU = %.2f miliseconds\n", gpuTime);
+    printf("time on GPU = %f miliseconds\n", gpuTime);
 
     cudaEventDestroy( start );
     cudaEventDestroy( stop );
 
     // copy the array 'c' back from the GPU to the CPU
-    HANDLE_ERROR( cudaMemcpy( c, dev_c, N * sizeof(int),
-                              cudaMemcpyDeviceToHost ) );
-
+    HANDLE_ERROR( cudaMemcpy( c, dev_c, N * sizeof(int), cudaMemcpyDeviceToHost ) );
 
     // free the memory allocated on the GPU
     HANDLE_ERROR( cudaFree( dev_a ) );
@@ -198,7 +190,6 @@ namespace gpu_add
 
 namespace cpu_add
 {
-
   float timedifference_msec(struct timeval t0, struct timeval t1)
   {
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
@@ -221,8 +212,8 @@ namespace cpu_add
     // fill the arrays 'a' and 'b' on the CPU
     for (int i=0; i<N; i++)
     {
-      a[i] = -i;
-      b[i] = i * i;
+      a[i] = i;
+      b[i] = i;
     }
 
     struct timeval stop, start;
