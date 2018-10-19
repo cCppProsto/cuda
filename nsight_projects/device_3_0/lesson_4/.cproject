@@ -32,7 +32,7 @@
 								<inputType id="nvcc.compiler.input.c.535846355" superClass="nvcc.compiler.input.c"/>
 							</tool>
 							<tool id="nvcc.linker.base.1274328281" name="NVCC Linker" superClass="nvcc.linker.base">
-								<option id="nvcc.linker.option.libs.19268621" superClass="nvcc.linker.option.libs" valueType="libs">
+								<option id="nvcc.linker.option.libs.19268621" name="Libraries (-l)" superClass="nvcc.linker.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="GL"/>
 									<listOptionValue builtIn="false" value="glut"/>
 								</option>
@@ -56,6 +56,8 @@
 				<executable devicelink="false">
 					<sass major="3" minor="0"/>
 					<ptx major="3" minor="0"/>
+					<ptx major="6" minor="1"/>
+					<sass major="6" minor="1"/>
 				</executable>
 				<editor-arch major="3" minor="0"/>
 			</storageModule>
@@ -141,4 +143,5 @@
 			<resource resourceType="PROJECT" workspacePath="/lesson_4"/>
 		</configuration>
 	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 </cproject>
