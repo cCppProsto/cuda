@@ -1,22 +1,34 @@
 /*
- ============================================================================
- Name        : lesson_5.cu
- Author      : cppProsto
- Version     :
- Copyright   : Your copyright notice
- Description : CUDA compute reciprocals
- ============================================================================
+ * Copyright 1993-2010 NVIDIA Corporation.  All rights reserved.
+ *
+ * NVIDIA Corporation and its licensors retain all intellectual property and
+ * proprietary rights in and to this software and related documentation.
+ * Any use, reproduction, disclosure, or distribution of this software
+ * and related documentation without an express license agreement from
+ * NVIDIA Corporation is strictly prohibited.
+ *
+ * Please refer to the applicable NVIDIA end user license agreement (EULA)
+ * associated with this source code for terms and conditions that govern
+ * your use of this NVIDIA software.
+ *
  */
 
-#include <cuda_runtime.h>
-#include <sys/time.h>
-#include <unistd.h>
 
 #include "../../../../common/book.h"
 #include "../../../../common/helper_cuda.h"
 #include "../../../../common/helper_string.h"
+#include <sys/time.h>
+#include<unistd.h>
 
-#define N   60000
+
+// N blocks * 1 thread / block = N parallel thread
+// N/2, 2
+// N/4, 4
+
+// int tid = threadIdx.x + blockIdx.x * blockDim.x
+// gridDim
+
+
 
 void print_device_info()
 {
@@ -130,11 +142,13 @@ void print_device_info()
   }
 }
 
-namespace gpu_add
+namespace gpu_add_small
 {
+  #define N   1024
+
   __global__ void add( int *a, int *b, int *c )
   {
-    int tid = blockIdx.x;    // this thread handles the data at its thread id
+    int tid = threadIdx.x;
     if (tid < N)
       c[tid] = a[tid] + b[tid];
   }
@@ -143,7 +157,6 @@ namespace gpu_add
   {
     int a[N], b[N], c[N];
     int *dev_a, *dev_b, *dev_c;
-
 
     // allocate the memory on the GPU
     HANDLE_ERROR( cudaMalloc( (void**)&dev_a, N * sizeof(int) ) );
@@ -161,25 +174,18 @@ namespace gpu_add
     HANDLE_ERROR( cudaMemcpy( dev_a, a, N * sizeof(int), cudaMemcpyHostToDevice ) );
     HANDLE_ERROR( cudaMemcpy( dev_b, b, N * sizeof(int), cudaMemcpyHostToDevice ) );
 
-    cudaEvent_t start, stop;
-    float gpuTime = 0.0;
-
-    cudaEventCreate( &start );
-    cudaEventCreate( &stop );
-    cudaEventRecord( start, 0 );
-
-    add<<<N, 1>>>( dev_a, dev_b, dev_c );
-
-    cudaEventRecord( stop, 0 );
-    cudaEventSynchronize( stop );
-    cudaEventElapsedTime( &gpuTime, start, stop );
-    printf("time on GPU = %f miliseconds\n", gpuTime);
-
-    cudaEventDestroy( start );
-    cudaEventDestroy( stop );
+    // N/1024
+    // (N+1024-1)/1024
+    // ceil
+    add<<<1,N>>>( dev_a, dev_b, dev_c );
 
     // copy the array 'c' back from the GPU to the CPU
     HANDLE_ERROR( cudaMemcpy( c, dev_c, N * sizeof(int), cudaMemcpyDeviceToHost ) );
+
+    // display the results
+    printf( "%d + %d = %d\n", a[0], b[0], c[0] );
+    printf( "%d + %d = %d\n", a[10], b[10], c[10] );
+    printf( "%d + %d = %d\n", a[100], b[100], c[100] );
 
     // free the memory allocated on the GPU
     HANDLE_ERROR( cudaFree( dev_a ) );
@@ -188,49 +194,123 @@ namespace gpu_add
   }
 }
 
-namespace cpu_add
+namespace gpu_add_long
 {
-  float timedifference_msec(struct timeval t0, struct timeval t1)
-  {
-    return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
-  }
+  #define N_2 60000
 
-  void add( int *a, int *b, int *c )
+
+/*
+
+block 0  |  thread 0  |  thread 1  |  thread 2  |  thread 3  |
+
+block 1  |  thread 0  |  thread 1  |  thread 2  |  thread 3  |
+
+block 2  |  thread 0  |  thread 1  |  thread 2  |  thread 3  |
+
+block 3  |  thread 0  |  thread 1  |  thread 2  |  thread 3  |
+
+*/
+
+// N / 1024
+  __global__ void add( int *a, int *b, int *c )
   {
-    int tid = 0;    // this is CPU zero, so we start at zero
-    while (tid < N)
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    while (tid < N_2)
     {
       c[tid] = a[tid] + b[tid];
-      tid += 1;   // we have one CPU, so we increment by one
+      tid += blockDim.x * gridDim.x;
     }
   }
 
-  void cpu_main( void )
+  void gpu_main( void )
   {
-    int a[N], b[N], c[N];
+    int *a, *b, *c;
+    int *dev_a, *dev_b, *dev_c;
+
+    // allocate the memory on the CPU
+    a = (int*)malloc( N_2 * sizeof(int) );
+    b = (int*)malloc( N_2 * sizeof(int) );
+    c = (int*)malloc( N_2 * sizeof(int) );
+
+    // allocate the memory on the GPU
+    HANDLE_ERROR( cudaMalloc( (void**)&dev_a, N_2 * sizeof(int) ) );
+    HANDLE_ERROR( cudaMalloc( (void**)&dev_b, N_2 * sizeof(int) ) );
+    HANDLE_ERROR( cudaMalloc( (void**)&dev_c, N_2 * sizeof(int) ) );
 
     // fill the arrays 'a' and 'b' on the CPU
-    for (int i=0; i<N; i++)
+    for (int i=0; i<N_2; i++)
     {
       a[i] = i;
       b[i] = i;
     }
 
-    struct timeval stop, start;
-    gettimeofday(&start, NULL);
+    // copy the arrays 'a' and 'b' to the GPU
+    HANDLE_ERROR( cudaMemcpy( dev_a, a, N_2 * sizeof(int), cudaMemcpyHostToDevice ) );
+    HANDLE_ERROR( cudaMemcpy( dev_b, b, N_2 * sizeof(int), cudaMemcpyHostToDevice ) );
 
-    add( a, b, c );
+    cudaEvent_t start, stop;
+    float gpuTime = 0.0;
 
-    gettimeofday(&stop, NULL);
-    printf("time on CPU = %.2f miliseconds\n",  timedifference_msec(start, stop));
+    cudaEventCreate( &start );
+    cudaEventCreate( &stop );
+    cudaEventRecord( start, 0 );
+
+    // Launch the Vector Add CUDA Kernel
+    int threadsPerBlock = 1024;
+    int blocksPerGrid =(N_2 + threadsPerBlock - 1) / threadsPerBlock;
+    printf("\n\nCUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid, threadsPerBlock);
+    add<<<blocksPerGrid, threadsPerBlock>>>( dev_a, dev_b, dev_c );
+
+    //add<<<128,128>>>( dev_a, dev_b, dev_c );
+
+    cudaEventRecord( stop, 0 );
+    cudaEventSynchronize( stop );
+    cudaEventElapsedTime( &gpuTime, start, stop );
+
+    cudaEventDestroy( start );
+    cudaEventDestroy( stop );
+
+    // copy the array 'c' back from the GPU to the CPU
+    HANDLE_ERROR( cudaMemcpy( c, dev_c, N_2 * sizeof(int), cudaMemcpyDeviceToHost ) );
+
+    // verify that the GPU did the work we requested
+    bool success = true;
+    for (int i=0; i<N_2; i++)
+    {
+      if ((a[i] + b[i]) != c[i])
+      {
+        printf( "Error:  %d + %d != %d\n", a[i], b[i], c[i] );
+        success = false;
+      }
+    }
+
+    if (success)
+    {
+      printf("time on GPU = %f miliseconds\n", gpuTime);
+      printf( "We did it!\n" );
+      // display the results
+      printf( "%d + %d = %d\n", a[0], b[0], c[0] );
+      printf( "%d + %d = %d\n", a[10], b[10], c[10] );
+      printf( "%d + %d = %d\n", a[50000], b[50000], c[50000] );
+    }
+
+    // free the memory we allocated on the GPU
+    HANDLE_ERROR( cudaFree( dev_a ) );
+    HANDLE_ERROR( cudaFree( dev_b ) );
+    HANDLE_ERROR( cudaFree( dev_c ) );
+
+    // free the memory we allocated on the CPU
+    free( a );
+    free( b );
+    free( c );
   }
 }
 
 int main()
 {
   print_device_info();
-
-  gpu_add::gpu_main();
-  cpu_add::cpu_main();
+  //gpu_add_small::gpu_main();
+  gpu_add_long::gpu_main();
   return 0;
 }
+
