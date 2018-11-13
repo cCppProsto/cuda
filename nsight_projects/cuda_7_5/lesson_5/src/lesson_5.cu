@@ -68,6 +68,10 @@ void print_device_info()
 
     printf("%s", msg);
 
+    printf("  Total amount of constant memory:               %d\n",
+           deviceProp.totalConstMem);
+
+
     printf("  (%2d) Multiprocessors, (%3d) CUDA Cores/MP:     %d CUDA Cores\n",
            deviceProp.multiProcessorCount,
            _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor),
